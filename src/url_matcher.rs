@@ -25,13 +25,9 @@ pub enum UrlKind {
 }
 
 pub fn classify_url(url: &str) -> UrlKind {
-    let Some((host, path)) = validate_and_split(url) else {
+    let Some(path) = mediafire_path(url) else {
         return UrlKind::Unknown;
     };
-    if !is_mediafire_host(&host) {
-        return UrlKind::Unknown;
-    }
-    let path = normalize_path(path);
     if file_regex().is_match(path) {
         return UrlKind::File;
     }
@@ -43,11 +39,7 @@ pub fn classify_url(url: &str) -> UrlKind {
 
 /// Extract the file key (`<key>`) from a recognised file URL.
 pub fn extract_file_key(url: &str) -> Option<String> {
-    let (host, path) = validate_and_split(url)?;
-    if !is_mediafire_host(&host) {
-        return None;
-    }
-    let path = normalize_path(path);
+    let path = mediafire_path(url)?;
     file_regex()
         .captures(path)
         .and_then(|c| c.get(1).map(|m| m.as_str().to_string()))
@@ -58,14 +50,8 @@ pub fn extract_file_key(url: &str) -> Option<String> {
 /// MediaFire file URLs often carry the original filename as the third
 /// segment: `/file/<key>/<filename>[/file]`. The hint is best-effort —
 /// the authoritative filename comes from the parsed download page.
-/// Returns `None` when the second segment is the literal `file` suffix
-/// or absent.
 pub fn extract_filename_hint(url: &str) -> Option<String> {
-    let (host, path) = validate_and_split(url)?;
-    if !is_mediafire_host(&host) {
-        return None;
-    }
-    let path = normalize_path(path);
+    let path = mediafire_path(url)?;
     let caps = file_regex().captures(path)?;
     let raw = caps.get(2)?.as_str();
     if raw.is_empty() || raw == "file" {
@@ -74,11 +60,20 @@ pub fn extract_filename_hint(url: &str) -> Option<String> {
     Some(raw.to_string())
 }
 
+/// Returns the normalised path of an http(s) MediaFire URL, or `None`
+/// if the URL is non-MediaFire / non-http(s) / malformed.
+fn mediafire_path(url: &str) -> Option<&str> {
+    let (host, path) = validate_and_split(url)?;
+    if !is_mediafire_host(host) {
+        return None;
+    }
+    Some(normalize_path(path))
+}
+
 fn is_mediafire_host(host: &str) -> bool {
-    matches!(
-        host,
-        "mediafire.com" | "www.mediafire.com" | "m.mediafire.com"
-    )
+    ["mediafire.com", "www.mediafire.com", "m.mediafire.com"]
+        .iter()
+        .any(|h| host.eq_ignore_ascii_case(h))
 }
 
 fn normalize_path(path: &str) -> &str {
@@ -90,9 +85,8 @@ fn normalize_path(path: &str) -> &str {
 fn file_regex() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        // /file/<key>(/<filename>)?(/file)?  — `<filename>` cannot itself be the literal `file`
-        // segment when followed by nothing, but we accept it ambiguously and the caller
-        // resolves it via [`extract_filename_hint`].
+        // The optional second segment ambiguously matches both `<filename>`
+        // and the literal `file` suffix; `extract_filename_hint` resolves it.
         Regex::new(r"^/file/([A-Za-z0-9]+)(?:/([^/]+))?(?:/file)?$")
             .expect("file_regex: compile-time constant regex must compile")
     })
@@ -106,9 +100,9 @@ fn folder_regex() -> &'static Regex {
     })
 }
 
-fn validate_and_split(url: &str) -> Option<(String, &str)> {
+fn validate_and_split(url: &str) -> Option<(&str, &str)> {
     let (scheme, rest) = url.split_once("://")?;
-    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
         return None;
     }
     let (authority, path_and_query) = match rest.find('/') {
@@ -116,14 +110,27 @@ fn validate_and_split(url: &str) -> Option<(String, &str)> {
         None => (rest, ""),
     };
     let authority_no_user = authority.rsplit('@').next().unwrap_or(authority);
-    let host = authority_no_user
-        .split(':')
-        .next()
-        .unwrap_or(authority_no_user);
+    let host = extract_host(authority_no_user)?;
     if host.is_empty() {
         return None;
     }
-    Some((host.to_ascii_lowercase(), path_and_query))
+    Some((host, path_and_query))
+}
+
+/// Extract the host portion (without port) from an authority string.
+/// Handles plain hostnames (`example.com:8080`) and IPv6 literals
+/// (`[::1]:8080`). For IPv6 the brackets are kept so allow-list
+/// matches stay symmetric with what `Url::host_str` would return.
+fn extract_host(authority: &str) -> Option<&str> {
+    if authority.is_empty() {
+        return None;
+    }
+    if let Some(rest) = authority.strip_prefix('[') {
+        let close = rest.find(']')?;
+        return Some(&authority[..=close + 1]);
+    }
+    let host = authority.split(':').next().unwrap_or(authority);
+    (!host.is_empty()).then_some(host)
 }
 
 #[cfg(test)]

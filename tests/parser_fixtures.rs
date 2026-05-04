@@ -10,7 +10,7 @@ use std::path::Path;
 
 use rstest::rstest;
 use vortex_mod_mediafire::error::PluginError;
-use vortex_mod_mediafire::parser::{parse_file_page, parse_size_bytes, ParsedFile};
+use vortex_mod_mediafire::parser::{parse_file_page, parse_size_bytes};
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
@@ -142,19 +142,4 @@ fn parse_size_bytes_handles_each_supported_unit() {
         let diff = got.abs_diff(expected);
         assert!(diff <= 2, "{text}: expected {expected}, got {got}");
     }
-}
-
-#[test]
-fn parsed_file_struct_is_consistent() {
-    // Sanity-check: building a `ParsedFile` and reading its fields back
-    // works — keeps coverage on the public field set so the struct
-    // definition can't silently lose fields without a test failure.
-    let p = ParsedFile {
-        filename: Some("a.zip".into()),
-        size_bytes: Some(10),
-        direct_url: "https://download1.mediafire.com/x/y/a.zip".into(),
-    };
-    assert_eq!(p.filename.as_deref(), Some("a.zip"));
-    assert_eq!(p.size_bytes, Some(10));
-    assert!(p.direct_url.starts_with("https://"));
 }

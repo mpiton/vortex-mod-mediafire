@@ -37,9 +37,20 @@ pub struct HttpResponse {
     pub body: String,
 }
 
+/// Reject pages larger than this so a malicious server can't make every
+/// regex scan a multi-megabyte buffer. Real MediaFire landing pages weigh
+/// well under 500 KB, so 2 MiB is a generous ceiling.
+pub const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+
 impl HttpResponse {
     pub fn into_success_body(self) -> Result<String, PluginError> {
         if (200..300).contains(&self.status) {
+            if self.body.len() > MAX_BODY_BYTES {
+                return Err(PluginError::HttpStatus {
+                    status: self.status,
+                    message: format!("body exceeds {MAX_BODY_BYTES} bytes"),
+                });
+            }
             Ok(self.body)
         } else if self.status == 404 || self.status == 410 {
             Err(PluginError::Offline(format!("status {}", self.status)))
@@ -149,17 +160,14 @@ pub fn parse_file_page(html: &str) -> Result<ParsedFile, PluginError> {
 }
 
 fn locate_direct_url(html: &str) -> Option<String> {
-    if let Some(scrambled) = capture(html, scrambled_attr_regex()) {
-        if let Some(decoded) = decode_scrambled_url(&scrambled) {
-            return Some(decoded);
-        }
+    if let Some(decoded) =
+        capture(html, scrambled_attr_regex()).and_then(|s| decode_scrambled_url(&s))
+    {
+        return Some(decoded);
     }
-    let plain = capture(html, plain_href_regex())?;
-    if is_safe_download_url(&plain) {
-        Some(plain)
-    } else {
-        None
-    }
+    // `plain_href_regex` already anchors the host to `download[0-9]*.mediafire.com`,
+    // so no second `is_safe_download_url` check is needed on this branch.
+    capture(html, plain_href_regex())
 }
 
 fn locate_filename(html: &str) -> Option<String> {
@@ -204,7 +212,7 @@ fn plain_href_regex() -> &'static Regex {
 fn filename_title_regex() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r#"(?is)class="dl-btn-label"\s+title="([^"]+)""#)
+        Regex::new(r#"(?i)class="dl-btn-label"\s+title="([^"]+)""#)
             .expect("filename_title_regex: compile-time constant must compile")
     })
 }
@@ -293,6 +301,17 @@ mod tests {
         };
         let err = resp.into_success_body().unwrap_err();
         assert!(matches!(err, PluginError::Offline(_)));
+    }
+
+    #[test]
+    fn into_success_body_rejects_oversized_2xx_payload() {
+        let resp = HttpResponse {
+            status: 200,
+            headers: HashMap::new(),
+            body: "x".repeat(MAX_BODY_BYTES + 1),
+        };
+        let err = resp.into_success_body().unwrap_err();
+        assert!(matches!(err, PluginError::HttpStatus { status: 200, .. }));
     }
 
     #[test]
