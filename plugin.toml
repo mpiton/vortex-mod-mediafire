@@ -1,0 +1,13 @@
+[plugin]
+name = "vortex-mod-mediafire"
+version = "1.0.0"
+category = "hoster"
+author = "vortex-community"
+description = "MediaFire free hoster — direct download URL resolution from public file pages"
+license = "GPL-3.0"
+min_vortex_version = "0.1.0"
+
+[capabilities]
+# MediaFire scrapes the file landing page (no API). The plugin only
+# needs the host's `http_request` host function.
+http = true
