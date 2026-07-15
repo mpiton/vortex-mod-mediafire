@@ -25,11 +25,11 @@ Thanks for taking the time to contribute! This crate is a WASM plugin for the
 2. Create a feature branch (`git checkout -b feat/your-feature`)
 3. Add a **failing test first** — see existing fixtures in `tests/fixtures/*.html`
 4. Implement the change in `src/parser.rs` / `src/url_matcher.rs` / `src/lib.rs`
-5. Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`
+5. Run `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
 6. Build the WASM artefact (`cargo build --target wasm32-wasip1 --release`)
-   and check `wasm_smoke.rs` still passes
-7. Commit using [Conventional Commits](https://www.conventionalcommits.org/)
-8. Push to your fork and open a Pull Request
+7. Run `cargo test`, including the mandatory `wasm_smoke.rs`
+8. Commit using [Conventional Commits](https://www.conventionalcommits.org/)
+9. Push to your fork and open a Pull Request
 
 ### Commit Message Format
 
@@ -54,9 +54,6 @@ rustup target add wasm32-wasip1
 git clone https://github.com/mpiton/vortex-mod-mediafire.git
 cd vortex-mod-mediafire
 
-# Native unit tests + parser fixtures + WASM smoke
-cargo test
-
 # Lint + format
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
@@ -64,6 +61,9 @@ cargo fmt --check
 # Build WASM release artefact (1.1 MB)
 cargo build --target wasm32-wasip1 --release
 # → target/wasm32-wasip1/release/vortex_mod_mediafire.wasm
+
+# Native unit tests + parser fixtures + WASM smoke
+cargo test
 ```
 
 ## Adding a fixture

@@ -66,9 +66,10 @@ Vortex picks up the new plugin via the file watcher; no restart needed.
 ## Tests
 
 ```bash
-cargo test                              # 55 tests, ~10 ms
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
+cargo build --target wasm32-wasip1 --release  # required by the smoke tests
+cargo test                              # native + mandatory WASM smoke tests
 ```
 
 The HTML fixtures live in `tests/fixtures/*.html` — ten variants covering
