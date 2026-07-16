@@ -66,9 +66,11 @@ Vortex picks up the new plugin via the file watcher; no restart needed.
 ## Tests
 
 ```bash
-cargo test                              # 55 tests, ~10 ms
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets --target x86_64-unknown-linux-gnu -- -D warnings
+cargo clippy --locked --lib --target wasm32-wasip1 -- -D warnings
+cargo build --locked --lib --target wasm32-wasip1 --release
+cargo test --locked --all-targets --target x86_64-unknown-linux-gnu
 ```
 
 The HTML fixtures live in `tests/fixtures/*.html` — ten variants covering
